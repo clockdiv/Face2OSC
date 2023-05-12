@@ -4,6 +4,13 @@
 .dart_tool/
 .packages
 build/
+android/
+linux/
+macos/
+web/
+windows/
+test/
+
 # If you're building an application, you may want to check-in your pubspec.lock
 pubspec.lock
 
@@ -25,3 +32,5 @@ doc/api/
 
 .flutter-plugins
 .flutter-plugins-dependencies
+
+.DS_Store
