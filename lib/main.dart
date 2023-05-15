@@ -4,6 +4,7 @@
 //import 'dart:js';
 
 import 'package:arkit_plugin/arkit_plugin.dart';
+import 'package:face2osc/settings_screen.dart';
 import 'package:flutter/material.dart';
 //import 'package:vector_math/vector_math_64.dart' as vector;
 import 'package:flutter_slidable/flutter_slidable.dart';
@@ -125,28 +126,67 @@ class _FaceDetectionPageState extends State<FaceDetectionPage> {
           //appBar: AppBar(title: const Text('Face Detection Sample')),
           body: Column(
         children: [
+          // ----------- 4. Stacked ARKitSceneView with PAGEVIEW. Pageview has an empty Container and the SettingsScreen
           Expanded(
             flex: 3,
-            child: Container(
-              child: ARKitSceneView(
-                configuration: ARKitConfiguration.faceTracking,
-                onARKitViewCreated: onARKitViewCreated,
-              ),
+            child: Stack(
+              children: [
+                ARKitSceneView(
+                  configuration: ARKitConfiguration.faceTracking,
+                  onARKitViewCreated: onARKitViewCreated,
+                ),
+                PageView(
+                  physics: const ClampingScrollPhysics(),
+                  children: [
+                    Container(),
+                    SettingsScreen(),
+                  ],
+                ),
+              ],
             ),
           ),
+
+          // ----------- Test 3. Standard ARKitSceneView with STACKED Settings from Right
+          // Expanded(
+          //   flex: 3,
+          //   child: Stack(
+          //     children: [
+          //       ARKitSceneView(
+          //         configuration: ARKitConfiguration.faceTracking,
+          //         onARKitViewCreated: onARKitViewCreated,
+          //       ),
+          //       SettingsScreen()
+          //     ],
+          //   ),
+          // ),
+
+          // ----------- Test 2. Standard ARKitSceneView with PAGEVIEW swipe Settings from Right
+          // Expanded(
+          //   flex: 3,
+          //   child: PageView(
+          //     children: [
+          //       ARKitSceneView(
+          //         configuration: ARKitConfiguration.faceTracking,
+          //         onARKitViewCreated: onARKitViewCreated,
+          //       ),
+          //       SettingsScreen(),
+          //     ],
+          //   ),
+          // ),
+          // ----------- Test 1. Standard ARKitSceneView
+          // Expanded(
+          //   flex: 3,
+          //   child: Container(
+          //     child: ARKitSceneView(
+          //       configuration: ARKitConfiguration.faceTracking,
+          //       onARKitViewCreated: onARKitViewCreated,
+          //     ),
+          //   ),
+          // ),
+          // ----------- FeaturesSettings (BlendshapeWidgetList) View
           Expanded(
             flex: 2,
             child: getBlendshapeWidgetList(featuresSettings),
-            /*
-              child: Column(
-                children: [
-                  Text("Hello"),
-                  Container(
-                      margin: EdgeInsets.all(10),
-                      //color: Colors.blue,
-                      child: getBlendshapeWidgetList(featureElements)),
-                ],
-              ),*/
           ),
         ],
       ));
@@ -226,13 +266,7 @@ class _FaceDetectionPageState extends State<FaceDetectionPage> {
                     setState(() {
                       featuresSettings.values.elementAt(i).enabled =
                           !featuresSettings.values.elementAt(i).enabled;
-                      developer.log("pressed " +
-                          i.toString() +
-                          " and toggled it " +
-                          featuresSettings.values
-                              .elementAt(i)
-                              .enabled
-                              .toString());
+                      // developer.log("pressed " + i.toString() + " and toggled it " + featuresSettings.values.elementAt(i).enabled.toString());
                     });
                   },
                   icon: featuresSettings.values.elementAt(i).enabled
