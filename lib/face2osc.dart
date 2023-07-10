@@ -4,19 +4,15 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:arkit_plugin/arkit_plugin.dart';
-import 'package:flutter/services.dart';
-import 'package:vector_math/vector_math_64.dart' as vector;
 import 'package:flutter_slidable/flutter_slidable.dart';
 import 'dart:io';
-import 'package:osc/src/convert.dart';
 import 'package:osc/src/message.dart'; // https://github.com/pq/osc
-import 'package:osc/src/io.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:developer' as developer;
 
-class face2osc extends StatelessWidget {
-  const face2osc({super.key});
+class Face2osc extends StatelessWidget {
+  const Face2osc({super.key});
 
   // This widget is the root of your application.
   @override
@@ -25,7 +21,7 @@ class face2osc extends StatelessWidget {
       DeviceOrientation.portraitUp
     ]);
 
-    return CupertinoApp(
+    return const CupertinoApp(
       title: 'Face2OSC',
       theme: CupertinoThemeData(brightness: Brightness.light),
       home: Face2OSCHomePage(),
@@ -34,22 +30,24 @@ class face2osc extends StatelessWidget {
 }
 
 class Face2OSCHomePage extends StatefulWidget {
+  const Face2OSCHomePage({super.key});
+
   @override
-  _Face2OSCHomePageState createState() => _Face2OSCHomePageState();
+  Face2OSCHomePageState createState() => Face2OSCHomePageState();
 }
 
-class trackingFeature {
+class TrackingFeature {
   double weight = 0.0;
   bool enabled = true;
   late ARKitNode geometry;
 
-  trackingFeature() {
+  TrackingFeature() {
     //weight = 0.1;
     //enabled = true;
   }
 }
 
-class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
+class Face2OSCHomePageState extends State<Face2OSCHomePage> {
   late ARKitController arkitController;
   ARKitNode? node;
 
@@ -59,6 +57,9 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
 
   Color _buttonEnableAll = CupertinoColors.systemBlue;
   Color _buttonDisableAll = CupertinoColors.systemGrey;
+  final Color _buttonToggleSendingOn = CupertinoColors.systemGreen;
+  final Color _buttonToggleSendingOff = CupertinoColors.systemRed;
+
   // Color _buttonEmpty = CupertinoColors.systemGreen;
   // Color _buttonSettings = CupertinoColors.systemOrange;
 
@@ -70,6 +71,11 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
   late TextEditingController _portTextController;
   final FocusNode _focusNodeIPTextfield = FocusNode();
   final FocusNode _focusNodePortTextfield = FocusNode();
+
+  late InternetAddress destination;
+  late int port;
+  RawDatagramSocket? socket;
+  bool _isSending = false;
 
   final Set<String> features = {
     "browDown_L",
@@ -125,16 +131,16 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
     "noseSneer_R",
     "tongueOut"
   };
-  Map<String, trackingFeature> featuresSettings = {};
+  Map<String, TrackingFeature> featuresSettings = {};
 
-  _Face2OSCHomePageState() {
+  Face2OSCHomePageState() {
     // trackingFeatureGeometries = new List<ARKitNode>.empty();
-    features.forEach((element) {
-      featuresSettings[element] = new trackingFeature();
+    for (var element in features) {
+      featuresSettings[element] = TrackingFeature();
       // trackingFeatureGeometries.add(new ARKitNode());
-    });
+    }
     featuresSettings["browDown_R"]!.enabled = false;
-    _ipTextController = TextEditingController(text: ('192.168.1.100'));
+    _ipTextController = TextEditingController(text: ('192.168.178.100'));
     _portTextController = TextEditingController(text: ('4444'));
   }
 
@@ -152,9 +158,9 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
         controller: PageController(initialPage: 1),
         physics: const ClampingScrollPhysics(),
         children: [
-          Screen_About(),
-          Screen_Facetracking(),
-          Screen_Settings(),
+          screenAbout(),
+          screenFacetracking(),
+          screenSettings(),
         ],
       ),
     );
@@ -188,8 +194,6 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
     //   value.geometry = _createFeatureGeometry(anchor.rightEyeTransform);
     //   arkitController.add(value.geometry, parentNodeName: anchor.nodeName);
     // });
-
-    developer.log(anchor.blendShapes.length.toString());
   }
 
   // ARKitNode _createFeatureGeometry(Matrix4 transform) {
@@ -230,22 +234,32 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
       // });
 
       // Send OSC for all enabled Features
-      InternetAddress destination = InternetAddress(_ipTextController.text);
-      int port = int.parse(_portTextController.text);
-      developer.log(port.toString());
 
-      featuresSettings.forEach((key, value) {
-        if (value.enabled) {
-          String address = '/$key';
-          final arguments = <Object>[];
-          arguments.add(featuresSettings[key]!.weight);
-          final message = OSCMessage(address, arguments: arguments);
-          RawDatagramSocket.bind(InternetAddress.anyIPv4, 0).then((socket) {
+      // RawDatagramSocket.bind(InternetAddress.anyIPv4, 0, reuseAddress: true, reusePort: true).then((socket) {
+      //   featuresSettings.forEach((key, value) {
+      //     if (value.enabled) {
+      //       String address = '/$key';
+      //       final arguments = <Object>[];
+      //       arguments.add(featuresSettings[key]!.weight);
+      //       final message = OSCMessage(address, arguments: arguments);
+      //       final bytes = message.toBytes();
+      //       socket.send(bytes, destination, port);
+      //     }
+      //   });
+      // });
+
+      if (socket != null && _isSending) {
+        featuresSettings.forEach((key, value) {
+          if (value.enabled) {
+            String address = '/$key';
+            final arguments = <Object>[];
+            arguments.add(featuresSettings[key]!.weight);
+            final message = OSCMessage(address, arguments: arguments);
             final bytes = message.toBytes();
-            socket.send(bytes, destination, port);
-          });
-        }
-      });
+            socket?.send(bytes, destination, port);
+          }
+        });
+      }
 
       // Set State for the Featuresettings-List
       setState(() {
@@ -265,7 +279,28 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
   //   node.scale = enabled ? vector.Vector3.all(1) : vector.Vector3.all(1);
   // }
 
-  Widget Screen_Facetracking() {
+  void _toggleOSCSocket() async {
+    setState(() {
+      _isSending = !_isSending;
+    });
+
+    if (_isSending) {
+      destination = InternetAddress(_ipTextController.text);
+      port = int.parse(_portTextController.text);
+
+      if (socket != null) socket?.close();
+
+      socket = await RawDatagramSocket.bind(
+        InternetAddress.anyIPv4,
+        0,
+      );
+    } else {
+      socket?.close();
+      developer.log("socket closed.");
+    }
+  }
+
+  Widget screenFacetracking() {
     return Center(
       child: Column(
         children: [
@@ -309,14 +344,14 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
           ),
           Expanded(
             flex: 6,
-            child: BlendshapeWidgetList(featuresSettings),
+            child: blendshapeWidgetList(featuresSettings),
           ),
         ],
       ),
     );
   }
 
-  Widget BlendshapeWidgetList(Map<String, trackingFeature> featuresSettings) {
+  Widget blendshapeWidgetList(Map<String, TrackingFeature> featuresSettings) {
     return CustomScrollView(
       semanticChildCount: featuresSettings.length,
       slivers: <Widget>[
@@ -330,7 +365,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
                 footer: Padding(
                   padding: const EdgeInsets.only(left: 8),
                   child: Text(
-                    "Only enabled tracking features are sent to the receiver via OSC.\n" + "\nIP-Address of the Receiver: " + _ipTextController.text.toString() + "\nPort of the Receiver: " + _portTextController.text.toString(),
+                    "Only enabled tracking features are sent to the receiver via OSC.\n\nIP-Address of the Receiver: ${_ipTextController.text}\nPort of the Receiver: ${_portTextController.text}",
                     //style: CupertinoTheme.of(context).textTheme.tabLabelTextStyle,
                     style: const TextStyle(
                       fontSize: 10,
@@ -425,7 +460,35 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
                             ),
                           ),
                         ),
-                        /* Button Empty Button */
+                        /* Button StartStop Tracking */
+                        Expanded(
+                          flex: 1,
+                          child: GestureDetector(
+                            onTapDown: (TapDownDetails details) {
+                              setState(() {
+                                //_buttonToggleSending = _buttonToggleSending.;
+                              });
+                            },
+                            onTapUp: (TapUpDetails details) {
+                              _toggleOSCSocket();
+                            },
+                            child: Container(
+                              height: 48,
+                              alignment: Alignment.center,
+                              color: _isSending ? _buttonToggleSendingOff : _buttonToggleSendingOn,
+                              child: Text(
+                                _isSending ? "Stop" : "Start",
+                                style: const TextStyle(
+                                  color: CupertinoColors.white,
+                                  fontSize: 14,
+                                  fontFamily: '.SF UI Text',
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -458,7 +521,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
                           )
                         ],
                       ),
-                      child: BlendShape_Row_Item(featuresSettings.keys.elementAt(i), featuresSettings.values.elementAt(i).weight, featuresSettings.values.elementAt(i).enabled, i),
+                      child: blendShapeRowItem(featuresSettings.keys.elementAt(i), featuresSettings.values.elementAt(i).weight, featuresSettings.values.elementAt(i).enabled, i),
                     ),
                 ],
               ),
@@ -469,7 +532,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
     );
   }
 
-  Widget BlendShape_Row_Item(String name, double weight, bool enabled, int index) {
+  Widget blendShapeRowItem(String name, double weight, bool enabled, int index) {
     return SafeArea(
       top: false,
       bottom: false,
@@ -499,7 +562,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
             child: Icon(
               CupertinoIcons.circle_filled,
               semanticLabel: 'Enable/Disable Feature',
-              size: 8,
+              size: 12,
               color: enabled ? CupertinoColors.activeBlue : CupertinoColors.inactiveGray,
             ),
           ),
@@ -512,7 +575,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
     );
   }
 
-  Widget Screen_Settings() {
+  Widget screenSettings() {
     return Container(
       color: CupertinoColors.systemGrey6,
       padding: const EdgeInsets.only(
@@ -574,7 +637,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
                 padding: const EdgeInsets.all(16),
                 title: const Text('IP-Address'),
                 subtitle: const Text('IP of the Receiver.'),
-                trailing: Container(
+                trailing: SizedBox(
                   width: 140,
                   child: CupertinoTextField(
                     focusNode: _focusNodeIPTextfield,
@@ -611,7 +674,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
                 padding: const EdgeInsets.all(16),
                 title: const Text('Port'),
                 subtitle: const Text('Port of the Receiver.'),
-                trailing: Container(
+                trailing: SizedBox(
                   width: 140,
                   child: CupertinoTextField(
                     focusNode: _focusNodePortTextfield,
@@ -650,7 +713,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
     );
   }
 
-  Widget Screen_About() {
+  Widget screenAbout() {
     return Container(
       color: CupertinoColors.systemGrey6,
       padding: const EdgeInsets.only(
@@ -672,20 +735,20 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
               ),
               const SizedBox(height: 20),
               ClipRRect(
-                borderRadius: BorderRadius.all(Radius.circular(16)),
+                borderRadius: const BorderRadius.all(Radius.circular(16)),
                 child: Container(
                   color: CupertinoColors.white,
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
+                  child: const Padding(
+                    padding: EdgeInsets.all(16.0),
                     child: Column(
                       children: [
                         //          const SizedBox(height: 20),
-                        const Text(
+                        Text(
                           'This app was developed as part of the "Digital Lab" at the School for Performing Arts "Ernst Busch" in Berlin/Germany, which was funded by "Stiftung Innovation in der Hochschullehre".',
                           style: TextStyle(color: CupertinoColors.black, fontSize: 12),
                         ),
-                        const SizedBox(height: 20),
-                        const Text(
+                        SizedBox(height: 20),
+                        Text(
                           'Although there are several similar apps in the App Store, we wanted to have a simple face tracking app that sends tracking features (blendshapes) to a network device via OSC. We use it to control software synthesizers, animations in Blender or physical actuators like servo motors in puppets.',
                           style: TextStyle(color: CupertinoColors.black, fontSize: 12),
                         ),
@@ -730,7 +793,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
               RichText(
                 text: TextSpan(
                     text: 'github.com/clockdiv/Face2OSC',
-                    style: TextStyle(color: CupertinoColors.black, fontSize: 12, decoration: TextDecoration.underline),
+                    style: const TextStyle(color: CupertinoColors.black, fontSize: 12, decoration: TextDecoration.underline),
                     recognizer: TapGestureRecognizer()
                       ..onTap = () async {
                         Uri url = Uri.https('github.com', '/clockdiv/Face2OSC');
@@ -745,7 +808,7 @@ class _Face2OSCHomePageState extends State<Face2OSCHomePage> {
               RichText(
                 text: TextSpan(
                     text: 'hfs-berlin.de',
-                    style: TextStyle(color: CupertinoColors.black, fontSize: 12, decoration: TextDecoration.underline),
+                    style: const TextStyle(color: CupertinoColors.black, fontSize: 12, decoration: TextDecoration.underline),
                     recognizer: TapGestureRecognizer()
                       ..onTap = () async {
                         Uri url = Uri.https('hfs-berlin.de');
