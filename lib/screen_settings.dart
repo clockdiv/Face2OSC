@@ -1,23 +1,24 @@
 import 'dart:developer' as developer;
 import 'package:flutter/cupertino.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ScreenSettings extends StatefulWidget {
   ScreenSettings({super.key});
 
-  String _ipAdress = "192.168.222.222";
-  String _port = "3333";
+  // String _ipAdress = "192.168.4.1";
+  // String _port = "3333";
 
-  void set ip(String ip) {
-    _ipAdress = ip;
-    developer.log("new ip is: $_ipAdress");
-  }
+  // void set ip(String ip) {
+  //   _ipAdress = ip;
+  //   developer.log("new ip is: $_ipAdress");
+  // }
 
-  void set port(String port) {
-    _port = port;
-  }
+  // void set port(String port) {
+  //   _port = port;
+  // }
 
-  String get ip => _ipAdress;
-  String get port => _port;
+  // String get ip => _ipAdress;
+  // String get port => _port;
 
   @override
   State<ScreenSettings> createState() {
@@ -29,8 +30,14 @@ class _ScreenSettingsState extends State<ScreenSettings> {
   Color _textBorderIpAdress = CupertinoColors.systemGrey5.withAlpha(0);
   Color _textBorderPort = CupertinoColors.systemGrey5.withAlpha(0);
 
-  late TextEditingController _ipTextController = TextEditingController(text: (widget.ip));
-  late TextEditingController _portTextController = TextEditingController(text: (widget.port));
+  final Future<SharedPreferences> _prefs = SharedPreferences.getInstance();
+  late Future<String> _ipAddress;
+  late Future<String> _port;
+
+  late TextEditingController _ipTextController =
+      TextEditingController(text: ("waiting for ip..."));
+  late TextEditingController _portTextController =
+      TextEditingController(text: ("waiting for port..."));
 
   // bool _showAllFeatures = true;
   final FocusNode _focusNodeIPTextfield = FocusNode();
@@ -40,11 +47,39 @@ class _ScreenSettingsState extends State<ScreenSettings> {
   //   _ipTextController = TextEditingController(text: (widget.ip));
   //   _portTextController = TextEditingController(text: (widget.port));
   // }
+  @override
+  void initState() {
+    super.initState();
+    _readPrefs();
+  }
 
-  void setIpAddress() {
-    developer.log("setting ip address...");
+  void _readPrefs() {
+    _ipAddress = _prefs.then((SharedPreferences prefs) {
+      String ip = prefs.getString('ip') ?? '192.168.0.100';
+      String port = prefs.getString('port') ?? '4444';
+      _ipTextController.text = ip;
+      _portTextController.text = port;
+      return ip;
+    });
+  }
+
+  Future<void> _setIpAddress() async {
+    final SharedPreferences prefs = await _prefs;
+    developer.log("setting ip address in Future<void>...");
+    final String ip = _ipTextController.text.toString();
+
     setState(() {
-      widget.ip = "111.111.222.333";
+      _ipAddress = prefs.setString('ip', ip).then((value) => ip);
+    });
+  }
+
+  Future<void> _setPort() async {
+    final SharedPreferences prefs = await _prefs;
+    developer.log("setting port in Future<void>...");
+    final String port = _portTextController.text.toString();
+
+    setState(() {
+      _port = prefs.setString('port', port).then((value) => port);
     });
   }
 
@@ -69,7 +104,8 @@ class _ScreenSettingsState extends State<ScreenSettings> {
             ),
             child: Text(
               'Settings',
-              style: CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle,
+              style:
+                  CupertinoTheme.of(context).textTheme.navLargeTitleTextStyle,
             ),
           ),
           /* ------------------------------------------------------- */
@@ -127,21 +163,24 @@ class _ScreenSettingsState extends State<ScreenSettings> {
                     onTap: () {
                       setState(() {
                         _textBorderIpAdress = CupertinoColors.systemGrey5;
-                        _textBorderPort = CupertinoColors.systemGrey5.withAlpha(0);
+                        _textBorderPort =
+                            CupertinoColors.systemGrey5.withAlpha(0);
                       });
                     },
                     onSubmitted: (ipadress) {
                       setState(() {
-                        _textBorderIpAdress = CupertinoColors.systemGrey5.withAlpha(0);
+                        _textBorderIpAdress =
+                            CupertinoColors.systemGrey5.withAlpha(0);
                       });
-                      setIpAddress();
+                      _setIpAddress();
                     },
                     onTapOutside: (e) {
-                      _textBorderIpAdress = CupertinoColors.systemGrey5.withAlpha(0);
+                      _textBorderIpAdress =
+                          CupertinoColors.systemGrey5.withAlpha(0);
                       if (_focusNodeIPTextfield.hasFocus) {
                         _focusNodeIPTextfield.unfocus();
                       }
-                      setIpAddress();
+                      _setIpAddress();
                     },
                   ),
                 ),
@@ -165,24 +204,36 @@ class _ScreenSettingsState extends State<ScreenSettings> {
                     onTap: () {
                       setState(() {
                         _textBorderPort = CupertinoColors.systemGrey5;
-                        _textBorderIpAdress = CupertinoColors.systemGrey5.withAlpha(0);
+                        _textBorderIpAdress =
+                            CupertinoColors.systemGrey5.withAlpha(0);
                       });
                     },
-                    onSubmitted: (ipadress) {
+                    onSubmitted: (port) {
                       setState(() {
-                        _textBorderPort = CupertinoColors.systemGrey5.withAlpha(0);
+                        _textBorderPort =
+                            CupertinoColors.systemGrey5.withAlpha(0);
                       });
+                      _setPort();
                     },
                     onTapOutside: (e) {
-                      _textBorderPort = CupertinoColors.systemGrey5.withAlpha(0);
+                      _textBorderPort =
+                          CupertinoColors.systemGrey5.withAlpha(0);
                       if (_focusNodePortTextfield.hasFocus) {
                         _focusNodePortTextfield.unfocus();
                       }
+                      _setPort();
                     },
                   ),
                 ),
               ),
             ],
+          ),
+          Text(
+            "data",
+            style: const TextStyle(
+              fontSize: 10,
+              color: CupertinoColors.systemGrey,
+            ),
           ),
         ],
       ),
